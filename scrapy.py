@@ -9,17 +9,18 @@ from bs4 import BeautifulSoup
 
 
 class Crawl():
-    def __init__(self, url, path=None, imp_key=None):
+    def __init__(self, url, path=None, imp_key=None, end_key=None):
         self.url = url
         self.path = path
         self.imp_key = imp_key
+        self.end_key = end_key
         #url = 'https://www.mayoclinic.org/diseases-conditions'
         # a queue of urls to be crawled next
         self.new_urls = deque([(url,0)])
         # a set of urls that we have already processed
         self.processed_urls = set()
         # a set of domains inside the target website
-        self.local_urls = set()
+        self.final_urls = set()
         # a set of domains outside the target website
         self.foreign_urls = set()
         # a set of broken urls
@@ -29,6 +30,17 @@ class Crawl():
         # define log files
         self.delete_logs()
         self.init_logs()
+    
+    def make_meta(self):
+        cmd_list = ["egrep '(symptoms-causes|doctors-departments|diagnosis-treatment)' valid_url_list.txt -i | sort -u > url_list_sorted.txt",
+            "egrep '(symptoms-causes)' valid_url_list.txt -i | grep '?p=1' -v | sort -u > symptom_cause_url_list.txt",
+            "egrep '(doctors-departments)' valid_url_list.txt -i | grep '?p=1' -v | grep '?' -v | grep '#' -v | sort -u > doctors_departments_url_list.txt",
+            "egrep '(diagnosis-treatment)' valid_url_list.txt -i | grep '?p=1' -v | sort -u > diagnosis_treatment_url_list.txt",
+            "grep '?p=1' -v url_list_sorted.txt > url_list.txt",
+            "grep '?p=1' url_list_sorted.txt > url_meta_list.txt",
+            "awk -F '/' '{print $5}' url_list.txt | sort | uniq > disease_list.txt"]
+        for cmd in cmd_list:
+            os.system(cmd)
     
     def init_logs(self):
         self.final_url_log = open("final_url_log.txt", "w+")
@@ -59,6 +71,7 @@ class Crawl():
     def bfs_url_crawl(self, level=3):
         url_count = 0
         stop_flag = 0
+        local_urls = set()
         # process urls one by one until we exhaust the queue
         while len(self.new_urls) and not stop_flag:
             if len(self.new_urls) > 5000:
@@ -66,6 +79,9 @@ class Crawl():
             # move url from the queue to processed url set
             pop_val = self.new_urls.popleft()
             url, cur_level = pop_val
+            # if "letter=C" in url:
+            #     import pdb; pdb.set_trace()
+            #     debug_mode = 1
             info = "url : {} - Depth level : {}\n".format(url, cur_level)
             self.all_url_log.write(info)
             self.processed_urls.add(url)
@@ -107,23 +123,24 @@ class Crawl():
                 anchor = link.attrs["href"] if "href" in link.attrs else ''
                 
                 local_link = base_url + anchor
-                if local_link in self.local_urls or anchor.startswith('/es-es') or anchor.startswith('/ar/'):
+                if local_link in self.final_urls or anchor.startswith('/es-es') or anchor.startswith('/ar/'):
                     continue
 
                 strict_flag = False
                 if cur_level < len(self.path):
                     strict_flag = self.path[cur_level] in anchor
-                elif self.imp_key in anchor:
+                elif self.imp_key and self.imp_key in anchor:
                     strict_flag = True
                 
-                end_flag = anchor.endswith("?p=1") if cur_level >= 2 else True
+                end_flag = anchor.endswith(self.end_key) if self.end_key and (cur_level >= level - 1) else True
 
                 info = "url : {} - Depth level : {}\n".format(local_link, cur_level)
                 self.bfs_level_data_log(info, cur_level)
 
                 if anchor.startswith('/') and strict_flag and end_flag:
                     local_link = base_url + anchor
-                    self.local_urls.add(local_link)
+                    local_urls.add(local_link)
+                    self.final_urls.add(local_link)
                     self.final_url_log.write("url : {} - Depth level : {}\n".format(local_link, cur_level))
                 # elif strip_base in anchor:
                 #     self.unwanted_urls.add(anchor)
@@ -133,19 +150,24 @@ class Crawl():
                 # else:
                 #     self.foreign_urls.add(anchor)
                 if not stop_flag:
-                    for i in self.local_urls:
+                    for i in local_urls:
                         #for using only local
                         if not (i, cur_level+1) in self.new_urls and not i in self.processed_urls:
                             self.new_urls.append((i, cur_level+1))
+                    local_urls.clear()
                 #for using all the urls
                 # if not link in self.new_urls and not link in self.processed_urls:
                 #     self.new_urls.append(link)
-        self.save_data(self.local_urls, "valid_url_list.txt")
+        self.save_data(self.final_urls, "valid_url_list.txt")
         # self.save_data(self.unwanted_urls, "invalid_url_list.txt")
 
-url = 'https://www.mayoclinic.org/diseases-conditions'
-path_level = ["index","diseases-conditions"]
-must_have_key = "diseases-conditions"
-obj = Crawl(url, path_level, must_have_key)
-obj.bfs_url_crawl(level=3)
-obj.close_logs()
+if __name__ == "__main__":
+    url = 'https://www.mayoclinic.org/diseases-conditions'
+    path_level = ["index","diseases-conditions"]
+    must_have_key = "diseases-conditions"
+    end_key = "?p=1"
+
+    obj = Crawl(url, path_level, must_have_key, end_key)
+    obj.bfs_url_crawl(level=5)
+    obj.make_meta()
+    obj.close_logs()
