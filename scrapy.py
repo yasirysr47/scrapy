@@ -14,7 +14,7 @@ class Crawl():
         self.path = path
         self.imp_key = imp_key
         self.end_key = end_key
-        #url = 'https://www.mayoclinic.org/diseases-conditions'
+        #url = 'https://xyz.org/abc'
         # a queue of urls to be crawled next
         self.new_urls = deque([(url,0)])
         # a set of urls that we have already processed
@@ -32,13 +32,14 @@ class Crawl():
         self.init_logs()
     
     def make_meta(self):
+        # To be modified for any Personal Purpose to create meta data out of the generated data by scrapy
         cmd_list = ["egrep '(symptoms-causes|doctors-departments|diagnosis-treatment)' valid_url_list.txt -i | sort -u > url_list_sorted.txt",
             "egrep '(symptoms-causes)' valid_url_list.txt -i | grep '?p=1' -v | sort -u > symptom_cause_url_list.txt",
             "egrep '(doctors-departments)' valid_url_list.txt -i | grep '?p=1' -v | grep '?' -v | grep '#' -v | sort -u > doctors_departments_url_list.txt",
             "egrep '(diagnosis-treatment)' valid_url_list.txt -i | grep '?p=1' -v | sort -u > diagnosis_treatment_url_list.txt",
             "grep '?p=1' -v url_list_sorted.txt > url_list.txt",
             "grep '?p=1' url_list_sorted.txt > url_meta_list.txt",
-            "awk -F '/' '{print $5}' url_list.txt | sort | uniq > disease_list.txt"]
+            "awk -F '/' '{print $5}' url_list.txt | sort | uniq > dlist.txt"]
         for cmd in cmd_list:
             os.system(cmd)
     
@@ -79,9 +80,6 @@ class Crawl():
             # move url from the queue to processed url set
             pop_val = self.new_urls.popleft()
             url, cur_level = pop_val
-            # if "letter=C" in url:
-            #     import pdb; pdb.set_trace()
-            #     debug_mode = 1
             info = "url : {} - Depth level : {}\n".format(url, cur_level)
             self.all_url_log.write(info)
             self.processed_urls.add(url)
@@ -142,6 +140,7 @@ class Crawl():
                     local_urls.add(local_link)
                     self.final_urls.add(local_link)
                     self.final_url_log.write("url : {} - Depth level : {}\n".format(local_link, cur_level))
+                #Uncomment this part if required.
                 # elif strip_base in anchor:
                 #     self.unwanted_urls.add(anchor)
                 # elif not anchor.startswith('http'):
@@ -162,12 +161,13 @@ class Crawl():
         # self.save_data(self.unwanted_urls, "invalid_url_list.txt")
 
 if __name__ == "__main__":
-    url = 'https://www.mayoclinic.org/diseases-conditions'
-    path_level = ["index","diseases-conditions"]
-    must_have_key = "diseases-conditions"
+    url = 'https://xyz.org/abc'
+    path_level = ["index","cde"]
+    must_have_key = "efg"
     end_key = "?p=1"
 
     obj = Crawl(url, path_level, must_have_key, end_key)
     obj.bfs_url_crawl(level=5)
     obj.make_meta()
     obj.close_logs()
+    #TODO: DFS crawling.
