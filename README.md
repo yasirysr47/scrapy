@@ -1,6 +1,9 @@
 # scrapy
+
+just an url scraper
 ------------
-this is an advanced webcrawler for specific tasks.
+
+an advanced web URL crawler for specific tasks.
 
 the script has a class called **Crawl** which takes the following parameters:
 1. **url** : the url which to crawl
