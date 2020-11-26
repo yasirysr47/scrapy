@@ -1,12 +1,16 @@
-import os
+import os, sys
 import requests
 import requests.exceptions
 from urllib.parse import urlsplit
 from urllib.parse import urlparse
 from collections import deque
 from bs4 import BeautifulSoup
+#depended upon data_store
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+from DataStore.dir import Dir
+import DataStore.src as src
 
-
+PATH = Dir()
 
 class Crawl():
     def __init__(self, url, path=None, imp_key=None, end_key=None):
@@ -14,7 +18,6 @@ class Crawl():
         self.path = path
         self.imp_key = imp_key
         self.end_key = end_key
-        #url = 'https://www.mayoclinic.org/diseases-conditions'
         # a queue of urls to be crawled next
         self.new_urls = deque([(url,0)])
         # a set of urls that we have already processed
@@ -23,8 +26,6 @@ class Crawl():
         self.final_urls = set()
         # a set of domains outside the target website
         self.foreign_urls = set()
-        # a set of broken urls
-        self.broken_urls = set()
         # a set of unwanted links
         self.unwanted_urls = set()
         # define log files
@@ -32,30 +33,27 @@ class Crawl():
         self.init_logs()
     
     def make_meta(self):
-        cmd_list = ["egrep '(symptoms-causes|doctors-departments|diagnosis-treatment)' valid_url_list.txt -i | sort -u > url_list_sorted.txt",
-            "egrep '(symptoms-causes)' valid_url_list.txt -i | grep '?p=1' -v | sort -u > symptom_cause_url_list.txt",
-            "egrep '(doctors-departments)' valid_url_list.txt -i | grep '?p=1' -v | grep '?' -v | grep '#' -v | sort -u > doctors_departments_url_list.txt",
-            "egrep '(diagnosis-treatment)' valid_url_list.txt -i | grep '?p=1' -v | sort -u > diagnosis_treatment_url_list.txt",
-            "grep '?p=1' -v url_list_sorted.txt > url_list.txt",
-            "grep '?p=1' url_list_sorted.txt > url_meta_list.txt",
-            "awk -F '/' '{print $5}' url_list.txt | sort | uniq > disease_list.txt"]
+        cmd_list = src.cmd_list
         for cmd in cmd_list:
             os.system(cmd)
     
     def init_logs(self):
-        self.final_url_log = open("final_url_log.txt", "w+")
-        self.all_url_log = open("all_url_log.txt", "w+")
-        self.test_log = open("test_log.txt", "w+")
-        self.log = open("log.txt", "w+")
+        self.final_url_log = open(os.path.join(PATH.log_data, "scrapy_final_url_log.txt"), "w+")
+        self.all_url_log = open(os.path.join(PATH.log_data, "scrapy_all_url_log.txt"), "w+")
+        self.test_log = open(os.path.join(PATH.log_data, "scrapy_test_log.txt"), "w+")
+        self.log = open(os.path.join(PATH.log_data, "scrapy_log.txt"), "w+")
+        self.fail_log = open(os.path.join(PATH.log_data, "scrapy_fail.txt"), "w+")
+
 
     def close_logs(self):
         self.final_url_log.close()
         self.all_url_log.close()
         self.test_log.close()
         self.log.close()
+        self.fail_log.close()
     
     def delete_logs(self):
-        cmd = "rm -rf *txt"
+        cmd = "rm -rf {}/*txt".format(PATH.log_data)
         os.system(cmd)
 
     def save_data(self, data, file):
@@ -64,8 +62,8 @@ class Crawl():
                 fp.write("{}\n".format(url))
     
     def bfs_level_data_log(self, data, level):
-        filename = "level_{}_contents.txt".format(level)
-        with open(filename, "a+") as fp:
+        filename = "scrapy_level_{}_contents.txt".format(level)
+        with open(os.path.join(PATH.log_data, filename), "a+") as fp:
             fp.write(data)
 
     def bfs_url_crawl(self, level=3):
@@ -79,15 +77,12 @@ class Crawl():
             # move url from the queue to processed url set
             pop_val = self.new_urls.popleft()
             url, cur_level = pop_val
-            # if "letter=C" in url:
-            #     import pdb; pdb.set_trace()
-            #     debug_mode = 1
             info = "url : {} - Depth level : {}\n".format(url, cur_level)
             self.all_url_log.write(info)
             self.processed_urls.add(url)
 
             url_count += 1
-            if url_count%10 == 0:
+            if url_count%100 == 0:
                 print("======= {} url's Proccessed ====== ".format(url_count))
                 print("number of new urls in Que : {}".format(len(self.new_urls)))
                 for i, url in enumerate(self.new_urls):
@@ -95,19 +90,19 @@ class Crawl():
                         continue
                     self.log.write("{}\n".format(url))
 
-            
             if cur_level > level:
                 print("skipping url : {}  <> cur_level : {}".format(url, cur_level))
                 continue
-            
             try:
                 response = requests.get(url)
+                if response.status_code != 200:
+                    self.fail_log.write("{}\n".format(url))
             except(
                 requests.exceptions.MissingSchema, requests.exceptions.ConnectionError,
                 requests.exceptions.InvalidURL, requests.exceptions.InvalidSchema
                 ):
                 # add broken urls to it’s own set, then continue
-                self.broken_urls.add(url)
+                self.fail_log.write("{}\n".format(url))
                 continue
             # extract base url to resolve relative links
             parts = urlsplit(url)
@@ -115,7 +110,6 @@ class Crawl():
             # strip_base = base.replace("www.", "")
             base_url = "{0.scheme}://{0.netloc}".format(parts)
             # path = url[:url.rfind('/')+1] if '/' in parts.path else url
-
             soup = BeautifulSoup(response.text, "lxml")
 
             for link in soup.find_all('a'):
@@ -162,12 +156,12 @@ class Crawl():
         # self.save_data(self.unwanted_urls, "invalid_url_list.txt")
 
 if __name__ == "__main__":
-    url = 'https://www.mayoclinic.org/diseases-conditions'
-    path_level = ["index","diseases-conditions"]
-    must_have_key = "diseases-conditions"
-    end_key = "?p=1"
+    url = src.scrapy_input
+    path_level = src.path_level
+    must_have_key = src.must_have_key
+    end_key = src.end_key
 
     obj = Crawl(url, path_level, must_have_key, end_key)
-    obj.bfs_url_crawl(level=5)
+    obj.bfs_url_crawl(level=7)
     obj.make_meta()
     obj.close_logs()
