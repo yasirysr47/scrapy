@@ -1,3 +1,4 @@
+import re
 import os, sys
 import requests
 import requests.exceptions
@@ -28,6 +29,8 @@ class Crawl():
         self.foreign_urls = set()
         # a set of unwanted links
         self.unwanted_urls = set()
+        # set of broken urls
+        self.broken_urls = set()
         # define log files
         self.delete_logs()
         self.init_logs()
@@ -96,13 +99,19 @@ class Crawl():
             try:
                 response = requests.get(url)
                 if response.status_code != 200:
-                    self.fail_log.write("{}\n".format(url))
+                    if re.search(src.imp_keywords_pattern, url):
+                        if url in self.broken_urls:
+                            self.fail_log.write("{}\n".format(url))
+                        else:
+                            self.new_urls.append((url, cur_level))
+                    self.broken_urls.add(url)
+                    continue
             except(
                 requests.exceptions.MissingSchema, requests.exceptions.ConnectionError,
                 requests.exceptions.InvalidURL, requests.exceptions.InvalidSchema
                 ):
                 # add broken urls to it’s own set, then continue
-                self.fail_log.write("{}\n".format(url))
+                self.broken_urls.add(url)
                 continue
             # extract base url to resolve relative links
             parts = urlsplit(url)
@@ -162,6 +171,6 @@ if __name__ == "__main__":
     end_key = src.end_key
 
     obj = Crawl(url, path_level, must_have_key, end_key)
-    obj.bfs_url_crawl(level=7)
+    obj.bfs_url_crawl(level=6)
     obj.make_meta()
     obj.close_logs()
