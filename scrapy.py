@@ -4,6 +4,7 @@ import requests
 import requests.exceptions
 from urllib.parse import urlsplit
 from urllib.parse import urlparse
+import urllib.request as req
 from collections import deque
 from bs4 import BeautifulSoup
 #depended upon data_store
@@ -12,6 +13,19 @@ from DataStore.dir import Dir
 import DataStore.src as src
 
 PATH = Dir()
+
+class Scraper():
+    def __init__(self, url):
+        self.url = url
+    
+    def init_parser(self, url=''):
+        if not url:
+            url = self.url
+        scraped_data = req.urlopen(url)
+        article = scraped_data.read()
+        parsed_article = BeautifulSoup(article,'lxml')
+        return parsed_article
+
 
 class Crawl():
     def __init__(self, url, path=None, imp_key=None, end_key=None):
@@ -41,11 +55,11 @@ class Crawl():
             os.system(cmd)
     
     def init_logs(self):
-        self.final_url_log = open(os.path.join(PATH.log_data, "scrapy_final_url_log.txt"), "w+")
-        self.all_url_log = open(os.path.join(PATH.log_data, "scrapy_all_url_log.txt"), "w+")
-        self.test_log = open(os.path.join(PATH.log_data, "scrapy_test_log.txt"), "w+")
-        self.log = open(os.path.join(PATH.log_data, "scrapy_log.txt"), "w+")
-        self.fail_log = open(os.path.join(PATH.log_data, "scrapy_fail.txt"), "w+")
+        self.final_url_log = open(os.path.join(PATH.log_data_dir, "scrapy_final_url_log.txt"), "w+")
+        self.all_url_log = open(os.path.join(PATH.log_data_dir, "scrapy_all_url_log.txt"), "w+")
+        self.test_log = open(os.path.join(PATH.log_data_dir, "scrapy_test_log.txt"), "w+")
+        self.log = open(os.path.join(PATH.log_data_dir, "scrapy_log.txt"), "w+")
+        self.fail_log = open(os.path.join(PATH.log_data_dir, "scrapy_fail.txt"), "w+")
 
 
     def close_logs(self):
@@ -56,7 +70,7 @@ class Crawl():
         self.fail_log.close()
     
     def delete_logs(self):
-        cmd = "rm -rf {}/*txt".format(PATH.log_data)
+        cmd = "rm -rf {}/*txt".format(PATH.log_data_dir)
         os.system(cmd)
 
     def save_data(self, data, file):
@@ -66,7 +80,7 @@ class Crawl():
     
     def bfs_level_data_log(self, data, level):
         filename = "scrapy_level_{}_contents.txt".format(level)
-        with open(os.path.join(PATH.log_data, filename), "a+") as fp:
+        with open(os.path.join(PATH.log_data_dir, filename), "a+") as fp:
             fp.write(data)
 
     def bfs_url_crawl(self, level=3):
@@ -126,7 +140,7 @@ class Crawl():
                 anchor = link.attrs["href"] if "href" in link.attrs else ''
                 
                 local_link = base_url + anchor
-                if local_link in self.final_urls or anchor.startswith('/es-es') or anchor.startswith('/ar/'):
+                if local_link in self.final_urls or anchor.startswith(('/es-es', '/ar/')):
                     continue
 
                 strict_flag = False
@@ -169,7 +183,7 @@ if __name__ == "__main__":
     path_level = src.path_level
     must_have_key = src.must_have_key
     end_key = src.end_key
-
+    import pdb; pdb.set_trace()
     obj = Crawl(url, path_level, must_have_key, end_key)
     obj.bfs_url_crawl(level=6)
     obj.make_meta()
