@@ -183,7 +183,6 @@ if __name__ == "__main__":
     path_level = src.path_level
     must_have_key = src.must_have_key
     end_key = src.end_key
-    import pdb; pdb.set_trace()
     obj = Crawl(url, path_level, must_have_key, end_key)
     obj.bfs_url_crawl(level=6)
     obj.make_meta()
